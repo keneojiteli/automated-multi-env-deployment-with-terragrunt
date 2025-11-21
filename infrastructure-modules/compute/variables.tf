@@ -4,11 +4,6 @@ variable "environment" {
   type =string
 }
 
-variable "ami" {
-    description = "AMI for EC2"
-    type = string
-}
-
 variable "instance_type" {
     description = "Instance type for EC2"
     type = string 
