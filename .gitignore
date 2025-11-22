@@ -1,33 +1,50 @@
-# Local .terraform directories
+# Terraform local working dirs
+.terraform/
+**/.terraform/
 **/.terraform/*
-/.terraform.lock.hcl
 
-# .tfstate files
+# Terraform lock files
+.terraform.lock.hcl
+**/.terraform.lock.hcl
+
+# Terraform state files (sensitive)
 *.tfstate
 *.tfstate.*
+**/*.tfstate
+**/*.tfstate.*
 
-# Crash log files
-crash.log
-crash.*.log
+# Terragrunt cache
+.terragrunt-cache/
+**/.terragrunt-cache/
 
-# Exclude all .tfvars files, which are likely to contain sensitive data
+# Terragrunt generated files (backend, provider, etc.)
+**/backend.tf
+**/provider.tf
+**/terraform.tfvars
+**/_terragrunt_debug.tf
+
+# TFVars (likely to contain sensitive data)
 *.tfvars
 *.tfvars.json
 *.auto.tfvars
 
-# Exclude override files
+# Override & debug files
 *.tfoverride
+*.tfplan
+*.tfplan.*
+crash.log
+crash.*.log
 
-# CLI configuration files
+# Local env files
 .terraformrc
 terraform.rc
-
-# Local environment files
+.env
+.env.*
 .envrc
 
-# Terragrunt related
-.terragrunt-cache/
-.terragrunt-stack/ # For Terragrunt Stacks feature
+# Generic OS junk
+.DS_Store
+Thumbs.db
 
 # image directory
 img
