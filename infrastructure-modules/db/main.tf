@@ -10,6 +10,8 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 
   tags = {
     Name = "${var.environment}-subnnet-grp"
+    Environment = var.environment
+    AllowDestroy = true
   }
 }
 
@@ -32,5 +34,7 @@ resource "aws_db_instance" "my_db" {
 
   tags = {
     Name = "${var.environment}-db"
+    Environment = var.environment
+    AllowDestroy = true
    }
 }

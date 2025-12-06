@@ -10,6 +10,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = var.enable_dns_hostnames
   tags = {
     Name = "${var.environment}-vpc"
+    Environment = var.environment
   }
 }
 
@@ -18,6 +19,7 @@ resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.main.id
     tags = {
       Name = "${var.environment}-igw"
+      Environment = var.environment
     }
 }
 
@@ -30,6 +32,7 @@ resource "aws_subnet" "public_subnet" {
   map_public_ip_on_launch = var.map_public_ip_on_launch
   tags = {
       Name = "${var.environment}-${element(var.pub_subnet, count.index)}"
+      Environment = var.environment
   }
 }
 
@@ -41,6 +44,7 @@ resource "aws_subnet" "private_subnet" {
   cidr_block = element(var.priv_subnet_cidr, count.index)
   tags = {
     Name = "${var.environment}-${element(var.priv_subnet, count.index)}"
+    Environment = var.environment
   }
 }
 
@@ -51,6 +55,7 @@ resource "aws_eip" "nat_eip" {
     depends_on = [ aws_internet_gateway.igw ]
     tags = {
       Name = "${var.environment}-EIP-${var.pub_subnet[count.index]}"
+      Environment = var.environment
     }
 }
 
@@ -62,6 +67,7 @@ resource "aws_nat_gateway" "public_nat_gateway" {
     depends_on = [ aws_internet_gateway.igw ]
     tags = {
       Name = "${var.environment}-NAT-${var.pub_subnet[count.index]}"
+      Environment = var.environment
     }
 }
 
@@ -74,6 +80,7 @@ resource "aws_route_table" "pub_rtb" {
     }
     tags = {
       Name = "${var.environment}-pub-rtb"
+      Environment = var.environment
     }
 }
 
@@ -87,6 +94,7 @@ resource "aws_route_table" "priv_rtb" {
     }
     tags = {
       Name = "${var.environment}-priv-rtb"
+      Environment = var.environment
     }
 } 
 
@@ -127,5 +135,6 @@ resource "aws_security_group" "instance_sg" {
 
     tags = {
         Name = "${var.environment}-sg"
+        Environment = var.environment
     }
 }
