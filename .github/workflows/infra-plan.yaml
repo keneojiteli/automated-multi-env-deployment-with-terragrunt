@@ -1,0 +1,72 @@
+name: Terraform/Terragrunt Plan
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [dev, staging, prod]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # TERRAGRUNT_VERSION: 0.92.1
+  # TERRAFORM_VERSION: "1.13.5"
+  TERRAGRUNT_ROOT: infrastructure-live
+  AWS_REGION: us-east-1
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}:role/gh-actions-${{ github.event.inputs.environment || 'dev' }}-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Terragrunt
+        run: |
+          curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v0.72.6/terragrunt_linux_amd64 -o terragrunt
+          chmod +x terragrunt
+          sudo mv terragrunt /usr/local/bin
+          terragrunt --version
+
+      - name: Format
+        run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+
+      - name: Validate
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+          terragrunt run-all validate
+
+      - name: Lint (tflint)
+        uses: terraform-linters/setup-tflint@v4
+      - run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+          tflint --recursive
+
+      - name: Security Scan (tfsec)
+        uses: aquasecurity/tfsec-action@v1.1.0
+
+      - name: Plan
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+          terragrunt run-all plan -out=tfplan
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ github.event.inputs.environment || 'dev' }}
+          path: ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}/**/tfplan
