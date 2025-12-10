@@ -58,7 +58,7 @@ jobs:
           tflint --recursive
 
       - name: Security Scan (tfsec)
-        uses: aquasecurity/tfsec-action@v1.1.0
+        uses: aquasecurity/tfsec-action@v1.0.0
 
       - name: Plan
         run: |
