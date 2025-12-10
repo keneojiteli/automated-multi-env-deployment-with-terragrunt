@@ -18,12 +18,18 @@ data "aws_iam_policy_document" "trust" {
     }
 
     condition {
-      test     = "StringEquals"
+      # test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values   = [
-        # "repo:${var.github_repo}:ref:refs/heads/${var.environment}"
-        "repo:${var.github_repo}:ref:refs/heads/main"
+        "repo:${var.github_repo}:environment:${var.environment}"
       ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
     }
   }
 }
