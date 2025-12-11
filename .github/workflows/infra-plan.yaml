@@ -17,7 +17,6 @@ permissions:
 
 env:
   # TERRAGRUNT_VERSION: 0.92.1
-  # TERRAFORM_VERSION: "1.13.5"
   TERRAGRUNT_ROOT: infrastructure-live
   AWS_REGION: us-east-1
   TERRAGRUNT_NON_INTERACTIVE: "true"
@@ -41,6 +40,11 @@ jobs:
           # role-to-assume: ${{ secrets.AWS_IAM_ROLE }}:role/gh-actions-${{ github.event.inputs.environment || 'dev' }}-role
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
 
       - name: Install Terragrunt
         run: |
