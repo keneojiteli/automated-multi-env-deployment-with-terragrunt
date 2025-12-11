@@ -21,7 +21,15 @@ inputs = {
     # S3
     {
       sid = "StateBucket"
-      actions = ["s3:GetObject","s3:PutObject","s3:ListBucket"]
+      actions = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration"
+      ]
       resources = ["arn:aws:s3:::terraform-state-*","arn:aws:s3:::terraform-state-*/*"]
     },
 

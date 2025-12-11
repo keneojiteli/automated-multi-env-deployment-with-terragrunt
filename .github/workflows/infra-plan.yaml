@@ -58,7 +58,8 @@ jobs:
 
       - name: Validate
         run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          # cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
           terragrunt run-all validate 
 
       - name: Lint (tflint)
