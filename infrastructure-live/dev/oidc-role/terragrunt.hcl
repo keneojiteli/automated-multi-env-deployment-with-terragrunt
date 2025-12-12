@@ -30,7 +30,11 @@ inputs = {
         "s3:GetBucketVersioning",
         "s3:GetEncryptionConfiguration"
       ]
-      resources = ["arn:aws:s3:::terraform-state-*","arn:aws:s3:::terraform-state-*/*"]
+      # resources = ["arn:aws:s3:::terraform-state-*","arn:aws:s3:::terraform-state-*/*"]
+      resources = [
+        "arn:aws:s3:::terraform-state-bucket-101325",
+        "arn:aws:s3:::terraform-state-bucket-101325/*"
+        ]
     },
 
     # create EC2 only when request includes Env tag
