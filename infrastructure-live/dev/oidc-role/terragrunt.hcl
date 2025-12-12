@@ -28,7 +28,8 @@ inputs = {
         "s3:ListBucket",
         "s3:GetBucketLocation",
         "s3:GetBucketVersioning",
-        "s3:GetEncryptionConfiguration"
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketPolicy"
       ]
       # resources = ["arn:aws:s3:::terraform-state-*","arn:aws:s3:::terraform-state-*/*"]
       resources = [
