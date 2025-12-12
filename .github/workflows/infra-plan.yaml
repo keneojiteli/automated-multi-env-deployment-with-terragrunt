@@ -56,6 +56,11 @@ jobs:
       - name: Format
         run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
 
+      - name: Check AWS caller identity
+        run: |
+          aws sts get-caller-identity
+          aws s3api get-bucket-location --bucket terraform-state-bucket-101325 || true
+
       - name: Init (backend + providers)
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
