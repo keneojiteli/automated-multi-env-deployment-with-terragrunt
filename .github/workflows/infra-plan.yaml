@@ -56,11 +56,15 @@ jobs:
       - name: Format
         run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
 
+      - name: Init (backend + providers)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          terragrunt run-all init --reconfigure
+
       - name: Validate
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          # cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-          terragrunt run-all validate 
+          terragrunt run-all validate
 
       - name: Lint (tflint)
         uses: terraform-linters/setup-tflint@v4
