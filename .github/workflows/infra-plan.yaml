@@ -16,7 +16,7 @@ permissions:
   id-token: write
 
 env:
-  # TERRAGRUNT_VERSION: 0.92.1
+  TERRAGRUNT_VERSION: 0.92.1
   TERRAGRUNT_ROOT: infrastructure-live
   AWS_REGION: us-east-1
   TERRAGRUNT_NON_INTERACTIVE: "true"
@@ -48,9 +48,13 @@ jobs:
 
       - name: Install Terragrunt
         run: |
-          curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v0.72.6/terragrunt_linux_amd64 -o terragrunt
-          chmod +x terragrunt
-          sudo mv terragrunt /usr/local/bin
+          # curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v0.72.6/terragrunt_linux_amd64 -o terragrunt
+          # chmod +x terragrunt
+          # sudo mv terragrunt /usr/local/bin
+
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt          
           terragrunt --version
 
       - name: Format
@@ -59,17 +63,20 @@ jobs:
       - name: Check AWS caller identity
         run: |
           aws sts get-caller-identity
-          aws s3api get-bucket-location --bucket terraform-state-bucket-101325 || true
+          aws s3api get-bucket-location --bucket terraform-state-bucket-101325
+          aws s3api get-bucket-public-access-block --bucket terraform-state-bucket-101325 || true
 
       - name: Init (backend + providers)
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          terragrunt run-all init --reconfigure
+          # terragrunt run-all init --reconfigure
+          terragrunt run -- init --reconfigure
 
       - name: Validate
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          terragrunt run-all validate
+          # terragrunt run-all validate
+          terragrunt run -- validate
 
       - name: Lint (tflint)
         uses: terraform-linters/setup-tflint@v4
@@ -83,7 +90,8 @@ jobs:
       - name: Plan
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-          terragrunt run-all plan -out=tfplan
+          # terragrunt run-all plan -out=tfplan
+          terragrunt run -- plan -out=tfplan
 
       - name: Upload Plan
         uses: actions/upload-artifact@v4

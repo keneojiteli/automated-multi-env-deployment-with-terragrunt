@@ -28,9 +28,10 @@ inputs = {
         "s3:DeleteObject",
         "s3:ListBucket",
         "s3:GetBucketLocation",
+        "s3:GetBucketPolicy",
         "s3:GetBucketVersioning",
         "s3:GetEncryptionConfiguration",
-        "s3:GetBucketPolicy",
+        "s3:PutEncryptionConfiguration",
         "s3:GetBucketPublicAccessBlock"
       ]
       # resources = ["arn:aws:s3:::terraform-state-*","arn:aws:s3:::terraform-state-*/*"]
