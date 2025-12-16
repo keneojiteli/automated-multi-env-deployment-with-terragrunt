@@ -59,10 +59,10 @@ jobs:
 
       # - name: Format
       #   run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-      - name: Format
-        run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-          terragrunt hclfmt --recursive
+      # - name: Format
+      #   run: |
+      #     cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+      #     terragrunt hclfmt --recursive
 
       - name: Check AWS caller identity
         run: |
