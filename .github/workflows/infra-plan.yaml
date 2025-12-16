@@ -68,13 +68,13 @@ jobs:
         run: |
           aws sts get-caller-identity
           aws s3api get-bucket-location --bucket terraform-state-bucket-101325
-          aws s3api get-bucket-public-access-block --bucket terraform-state-bucket-101325 || true
+          # aws s3api get-bucket-public-access-block --bucket terraform-state-bucket-101325 || true
 
       - name: Init (backend + providers)
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          # terragrunt run-all init --reconfigure
-          terragrunt run -- init --reconfigure
+          terragrunt run-all init --reconfigure
+          # terragrunt run -- init --reconfigure
 
       - name: Validate
         run: |
