@@ -73,8 +73,9 @@ jobs:
       - name: Init (backend + providers)
         run: |
           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          terragrunt run -- run-all init --reconfigure
-
+          terragrunt run-all init --reconfigure
+          # terragrunt run -- run-all init --reconfigure
+          # terragrunt run -- init --reconfigure
 
       - name: Validate
         run: |
