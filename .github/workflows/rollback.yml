@@ -1,0 +1,126 @@
+name: Rollback Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to rollback"
+        required: true
+        type: choice
+        options: [dev, staging, prod]
+      target_commit:
+        description: "Target commit SHA to rollback to (leave empty for last known good)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TERRAGRUNT_VERSION: 0.92.1
+  TERRAGRUNT_ROOT: infrastructure-live
+  AWS_REGION: us-east-1
+  TERRAGRUNT_NON_INTERACTIVE: "true"
+  TF_INPUT: "false"
+
+jobs:
+  prepare-rollback:
+    runs-on: ubuntu-latest
+    outputs:
+      target-commit: ${{ steps.target.outputs.commit }}
+      deployment-info: ${{ steps.target.outputs.deployment-info }}
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine Target Commit
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.target_commit }}" ]; then
+            echo "commit=${{ github.event.inputs.target_commit }}" >> $GITHUB_OUTPUT
+          else
+            # Get last known good deployment
+            deployment_info=$(aws s3 cp s3://terraform-state-bucket-101325/deployments/${{ github.event.inputs.environment }}/latest.json - 2>/dev/null || echo '{}')
+            commit=$(echo "$deployment_info" | jq -r '.commit_sha // empty')
+
+            if [ -z "$commit" ]; then
+              echo "Error: No previous deployment found for ${{ github.event.inputs.environment }}"
+              exit 1
+            fi
+
+            echo "commit=$commit" >> $GITHUB_OUTPUT
+            echo "deployment-info=$deployment_info" >> $GITHUB_OUTPUT
+          fi
+
+  rollback:
+    needs: prepare-rollback
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout Target Commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-rollback.outputs.target-commit }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Install Terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Manual Approval for Rollback
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+          issue-title: "Rollback ${{ github.event.inputs.environment }} to commit ${{ needs.prepare-rollback.outputs.target-commit }}"
+          issue-body: |
+            **Rollback Request**
+            - Environment: ${{ github.event.inputs.environment }}
+            - Target Commit: ${{ needs.prepare-rollback.outputs.target-commit }}
+            - Current Deployment: ${{ needs.prepare-rollback.outputs.deployment-info }}
+
+            Please review the changes and approve the rollback.
+
+      - name: Terragrunt Plan Rollback
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          terragrunt run-all init --terragrunt-non-interactive
+          terragrunt run-all plan --terragrunt-non-interactive
+
+      - name: Terragrunt Apply Rollback
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          terragrunt run-all apply --terragrunt-non-interactive -auto-approve
+
+      - name: Update Deployment Info
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          echo "{
+            \"commit_sha\": \"${{ needs.prepare-rollback.outputs.target-commit }}\",
+            \"deployment_time\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+            \"environment\": \"${{ github.event.inputs.environment }}\",
+            \"workflow_run_id\": \"${{ github.run_id }}\",
+            \"rollback\": true,
+            \"rollback_from\": \"${{ github.sha }}\"
+          }" > deployment-info.json
+
+          aws s3 cp deployment-info.json s3://terraform-state-bucket-101325/deployments/${{ github.event.inputs.environment }}/latest.json

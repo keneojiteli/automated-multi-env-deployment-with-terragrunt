@@ -48,3 +48,20 @@ Thumbs.db
 
 # image directory
 img
+
+# Deployment info files (contain sensitive deployment data)
+**/deployment-info.json
+
+# Local state lock table state (for state-lock module)
+infrastructure-live/state-lock/terraform.tfstate
+infrastructure-live/state-lock/terraform.tfstate.backup
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
