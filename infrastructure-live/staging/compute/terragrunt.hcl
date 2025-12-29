@@ -13,6 +13,12 @@ terraform {
 
 dependency "vpc" {
   config_path = "../vpc"
+  mock_outputs = {
+    pub_subnet_id = "subnet-000000"
+    vpc_sg        = "sg-000000"
+  }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
+  mock_outputs_merge_with_state           = true
 }
 
 inputs = {

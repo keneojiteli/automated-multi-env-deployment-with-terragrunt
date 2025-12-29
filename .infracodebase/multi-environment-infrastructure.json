@@ -1,0 +1,169 @@
+{
+  "nodes": [
+    {
+      "id": "github-actions",
+      "label": "GitHub Actions",
+      "subtitle": "CI/CD Pipeline",
+      "icon": "/icons/onprem/ci/github-actions.png"
+    },
+    {
+      "id": "state-backend",
+      "label": "State Backend",
+      "subtitle": "terraform-state-bucket",
+      "icon": "/icons/aws/storage/simple-storage-service-s3-bucket-with-objects.png"
+    },
+    {
+      "id": "state-lock",
+      "label": "State Lock",
+      "subtitle": "DynamoDB Table",
+      "icon": "/icons/aws/database/dynamodb.png"
+    },
+    {
+      "id": "dev-env",
+      "label": "Development Environment",
+      "type": "container"
+    },
+    {
+      "id": "staging-env",
+      "label": "Staging Environment",
+      "type": "container"
+    },
+    {
+      "id": "prod-env",
+      "label": "Production Environment",
+      "type": "container"
+    },
+    {
+      "id": "dev-vpc",
+      "label": "VPC",
+      "subtitle": "10.0.0.0/16",
+      "icon": "/icons/aws/network/vpc.png",
+      "type": "container",
+      "parentNode": "dev-env"
+    },
+    {
+      "id": "dev-pub-subnet",
+      "label": "Public Subnet",
+      "subtitle": "10.0.3.0/24",
+      "icon": "/icons/aws/network/public-subnet.png",
+      "type": "container",
+      "parentNode": "dev-vpc"
+    },
+    {
+      "id": "dev-priv-subnet",
+      "label": "Private Subnet",
+      "subtitle": "10.0.5.0/24",
+      "icon": "/icons/aws/network/public-subnet.png",
+      "type": "container",
+      "parentNode": "dev-vpc"
+    },
+    {
+      "id": "dev-ec2",
+      "label": "EC2 Instance",
+      "subtitle": "t2.micro",
+      "icon": "/icons/aws/compute/ec2.png",
+      "parentNode": "dev-pub-subnet"
+    },
+    {
+      "id": "dev-rds",
+      "label": "RDS PostgreSQL",
+      "subtitle": "db.t4g.micro",
+      "icon": "/icons/aws/database/rds.png",
+      "parentNode": "dev-priv-subnet"
+    },
+    {
+      "id": "staging-vpc",
+      "label": "VPC",
+      "subtitle": "10.1.0.0/16",
+      "icon": "/icons/aws/network/vpc.png",
+      "type": "container",
+      "parentNode": "staging-env"
+    },
+    {
+      "id": "staging-ec2",
+      "label": "EC2 Instance",
+      "subtitle": "t3.small",
+      "icon": "/icons/aws/compute/ec2.png",
+      "parentNode": "staging-vpc"
+    },
+    {
+      "id": "staging-rds",
+      "label": "RDS PostgreSQL",
+      "subtitle": "db.t4g.small",
+      "icon": "/icons/aws/database/rds.png",
+      "parentNode": "staging-vpc"
+    },
+    {
+      "id": "prod-vpc",
+      "label": "VPC",
+      "subtitle": "10.2.0.0/16",
+      "icon": "/icons/aws/network/vpc.png",
+      "type": "container",
+      "parentNode": "prod-env"
+    },
+    {
+      "id": "prod-ec2",
+      "label": "EC2 Instance",
+      "subtitle": "t3.medium",
+      "icon": "/icons/aws/compute/ec2.png",
+      "parentNode": "prod-vpc"
+    },
+    {
+      "id": "prod-rds",
+      "label": "RDS PostgreSQL",
+      "subtitle": "db.t4g.medium",
+      "icon": "/icons/aws/database/rds.png",
+      "parentNode": "prod-vpc"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "github-actions",
+      "target": "dev-env",
+      "label": "deploys to"
+    },
+    {
+      "id": "e2",
+      "source": "github-actions",
+      "target": "staging-env",
+      "label": "deploys to"
+    },
+    {
+      "id": "e3",
+      "source": "github-actions",
+      "target": "prod-env",
+      "label": "deploys to"
+    },
+    {
+      "id": "e4",
+      "source": "github-actions",
+      "target": "state-backend",
+      "label": "stores state"
+    },
+    {
+      "id": "e5",
+      "source": "github-actions",
+      "target": "state-lock",
+      "label": "locks state"
+    },
+    {
+      "id": "e6",
+      "source": "dev-ec2",
+      "target": "dev-rds",
+      "label": "connects to"
+    },
+    {
+      "id": "e7",
+      "source": "staging-ec2",
+      "target": "staging-rds",
+      "label": "connects to"
+    },
+    {
+      "id": "e8",
+      "source": "prod-ec2",
+      "target": "prod-rds",
+      "label": "connects to"
+    }
+  ]
+}

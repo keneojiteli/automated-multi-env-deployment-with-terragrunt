@@ -1,0 +1,243 @@
+name: Multi-Environment Infrastructure Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [dev, staging, prod]
+      action:
+        description: "Action to perform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+        default: plan
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+env:
+  TERRAGRUNT_VERSION: 0.92.1
+  TERRAGRUNT_ROOT: infrastructure-live
+  AWS_REGION: us-east-1
+  TERRAGRUNT_NON_INTERACTIVE: "true"
+  TF_INPUT: "false"
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.changes.outputs.environments }}
+      has-changes: ${{ steps.changes.outputs.has-changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environments
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environments=[\"${{ github.event.inputs.environment }}\"]" >> $GITHUB_OUTPUT
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Auto-deploy based on changes
+            changed_files=$(git diff --name-only HEAD~1 HEAD)
+            environments=()
+
+            if echo "$changed_files" | grep -q "infrastructure-live/dev/"; then
+              environments+=("dev")
+            fi
+            if echo "$changed_files" | grep -q "infrastructure-live/staging/"; then
+              environments+=("staging")
+            fi
+            if echo "$changed_files" | grep -q "infrastructure-live/prod/"; then
+              environments+=("prod")
+            fi
+
+            # If shared modules changed, deploy to all environments
+            if echo "$changed_files" | grep -q "infrastructure-modules/"; then
+              environments=("dev" "staging" "prod")
+            fi
+
+            if [ ${#environments[@]} -eq 0 ]; then
+              echo "environments=[]" >> $GITHUB_OUTPUT
+              echo "has-changes=false" >> $GITHUB_OUTPUT
+            else
+              env_json=$(printf '%s\n' "${environments[@]}" | jq -R . | jq -s .)
+              echo "environments=$env_json" >> $GITHUB_OUTPUT
+              echo "has-changes=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            # PR - just plan dev
+            echo "environments=[\"dev\"]" >> $GITHUB_OUTPUT
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+
+  plan:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: ${{ fromJson(needs.detect-changes.outputs.environments) }}
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Install Terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Create State Lock Table (if needed)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/state-lock
+          if ! aws dynamodb describe-table --table-name terraform-state-lock-table --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "Creating state lock table..."
+            terragrunt apply -auto-approve
+          else
+            echo "State lock table already exists"
+          fi
+
+      - name: Terragrunt Init (All Resources)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}
+          terragrunt run-all init --terragrunt-non-interactive
+
+      - name: Terragrunt Plan (All Resources)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}
+          terragrunt run-all plan --terragrunt-non-interactive -out=tfplan
+
+      - name: Upload Plan Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ matrix.environment }}
+          path: ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}/**/tfplan
+          retention-days: 30
+
+  apply:
+    needs: [detect-changes, plan]
+    if: |
+      needs.detect-changes.outputs.has-changes == 'true' && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+      )
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: ${{ fromJson(needs.detect-changes.outputs.environments) }}
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Install Terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Download Plan Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: plan-${{ matrix.environment }}
+          path: ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}
+
+      - name: Terragrunt Apply (All Resources)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}
+          terragrunt run-all apply --terragrunt-non-interactive tfplan
+
+      - name: Save Deployment Info for Rollback
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ matrix.environment }}
+          echo "{
+            \"commit_sha\": \"${{ github.sha }}\",
+            \"deployment_time\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+            \"environment\": \"${{ matrix.environment }}\",
+            \"workflow_run_id\": \"${{ github.run_id }}\"
+          }" > deployment-info.json
+
+          # Store in S3 for rollback reference
+          aws s3 cp deployment-info.json s3://terraform-state-bucket-101325/deployments/${{ matrix.environment }}/latest.json
+
+  destroy:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Install Terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Manual Approval Required
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+          issue-title: "Destroy infrastructure in ${{ github.event.inputs.environment }}"
+
+      - name: Terragrunt Destroy (All Resources)
+        run: |
+          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+          terragrunt run-all destroy --terragrunt-non-interactive -auto-approve
