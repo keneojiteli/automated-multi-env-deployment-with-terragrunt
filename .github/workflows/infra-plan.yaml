@@ -49,6 +49,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Clean Terragrunt cache
+        run: |
+          find . -type d -name ".terragrunt-cache" -prune -exec rm -rf {} +
+
+
       # Init environment backend once
       - name: Terragrunt init (env)
         working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}
