@@ -1,45 +1,35 @@
-name: Terraform/Terragrunt Plan
+name: Terragrunt Deploy (per-module)
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
-      environment:
-        description: "Target environment"
-        required: true
+      target_env:
         type: choice
-        options: [dev, staging, prod]
+        description: "Environment to deploy"
+        options: ["dev", "staging", "prod"]
 
 permissions:
-  contents: read
   id-token: write
+  contents: read
 
 env:
-  TERRAGRUNT_VERSION: 0.92.1
-  TERRAGRUNT_ROOT: infrastructure-live
-  AWS_REGION: us-east-1
+  TG_VERSION: 0.92.1
+  TG_ROOT: "infrastructure-live"
+  AWS_REGION: "us-east-1"  
   TERRAGRUNT_NON_INTERACTIVE: "true"
   TF_INPUT: "false"
 
 jobs:
-  plan:
+  deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'dev' }}
+    environment: ${{ github.event.inputs.target_env }}
 
     env:
-      environment: ${{ github.event.inputs.environment }}
+      TARGET_ENV: ${{ github.event.inputs.target_env }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          # role-to-assume: ${{ secrets.AWS_IAM_ROLE }}:role/gh-actions-${{ github.event.inputs.environment || 'dev' }}-role
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
@@ -48,59 +38,159 @@ jobs:
 
       - name: Install Terragrunt
         run: |
-          # curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v0.72.6/terragrunt_linux_amd64 -o terragrunt
-          # chmod +x terragrunt
-          # sudo mv terragrunt /usr/local/bin
-
-          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
-          chmod +x terragrunt_linux_amd64
-          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt          
+          wget -q -O terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TG_VERSION }}/terragrunt_linux_amd64"
+          chmod +x terragrunt
+          sudo mv terragrunt /usr/local/bin/terragrunt
           terragrunt --version
 
-      # - name: Format
-      #   run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-      # - name: Format
-      #   run: |
-      #     cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-      #     terragrunt hclfmt --recursive
-
-      - name: Check AWS caller identity
-        run: |
-          aws sts get-caller-identity
-          aws s3api get-bucket-location --bucket terraform-state-bucket-101325
-          # aws s3api get-bucket-public-access-block --bucket terraform-state-bucket-101325 || true
-
-      - name: Init (backend + providers)
-        run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          terragrunt run-all init --reconfigure
-          # terragrunt run -- run-all init --reconfigure
-          # terragrunt run -- init --reconfigure
-
-      - name: Validate
-        run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
-          # terragrunt run-all validate
-          terragrunt run -- validate
-
-      - name: Lint (tflint)
-        uses: terraform-linters/setup-tflint@v4
-      - run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-          tflint --recursive
-
-      - name: Security Scan (tfsec)
-        uses: aquasecurity/tfsec-action@v1.0.0
-
-      - name: Plan
-        run: |
-          cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
-          # terragrunt run-all plan -out=tfplan
-          terragrunt run -- plan -out=tfplan
-
-      - name: Upload Plan
-        uses: actions/upload-artifact@v4
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: plan-${{ github.event.inputs.environment || 'dev' }}
-          path: ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}/**/tfplan
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Init environment backend once
+      - name: Terragrunt init (env)
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}
+        run: terragrunt run -- init --reconfigure
+
+      # MODULE: VPC
+      - name: Plan VPC
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
+        run: |
+          terragrunt run -- init --reconfigure
+          terragrunt run -- plan -out=vpc.plan
+      - name: Apply VPC
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
+        run: terragrunt run -- apply vpc.plan
+
+      # MODULE: EC2
+      - name: Plan EC2
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
+        run: |
+          terragrunt run -- init --reconfigure
+          terragrunt run -- plan -out=ec2.plan
+      - name: Apply EC2
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
+        run: terragrunt run -- apply ec2.plan
+
+      # MODULE: RDS
+      - name: Plan RDS
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
+        run: |
+          terragrunt run -- init --reconfigure
+          terragrunt run -- plan -out=rds.plan
+      - name: Apply RDS
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
+        env:
+          TF_VAR_db_password: ${{ secrets.RDS_PASSWORD }}   # GitHub Env secret
+        run: terragrunt run -- apply rds.plan
+
+
+
+
+# name: Terraform/Terragrunt Plan
+
+# on:
+#   pull_request:
+#     branches: [main]
+#   workflow_dispatch:
+#     inputs:
+#       environment:
+#         description: "Target environment"
+#         required: true
+#         type: choice
+#         options: [dev, staging, prod]
+
+# permissions:
+#   contents: read
+#   id-token: write
+
+# env:
+#   TERRAGRUNT_VERSION: 0.92.1
+#   TERRAGRUNT_ROOT: infrastructure-live
+#   AWS_REGION: us-east-1
+#   TERRAGRUNT_NON_INTERACTIVE: "true"
+#   TF_INPUT: "false"
+
+# jobs:
+#   plan:
+#     runs-on: ubuntu-latest
+#     environment: ${{ github.event.inputs.environment || 'dev' }}
+
+#     env:
+#       environment: ${{ github.event.inputs.environment }}
+
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+
+#       - name: Configure AWS Credentials (OIDC)
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       - name: Install Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: 1.8.2
+
+#       - name: Install Terragrunt
+#         run: |
+#           # curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v0.72.6/terragrunt_linux_amd64 -o terragrunt
+#           # chmod +x terragrunt
+#           # sudo mv terragrunt /usr/local/bin
+
+#           wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64
+#           chmod +x terragrunt_linux_amd64
+#           sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt          
+#           terragrunt --version
+
+#       # - name: Format
+#       #   run: terragrunt hclfmt --terragrunt-working-dir ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+#       # - name: Format
+#       #   run: |
+#       #     cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+#       #     terragrunt hclfmt --recursive
+
+#       - name: Check AWS caller identity
+#         run: |
+#           aws sts get-caller-identity
+#           aws s3api get-bucket-location --bucket terraform-state-bucket-101325
+#           # aws s3api get-bucket-public-access-block --bucket terraform-state-bucket-101325 || true
+
+#       - name: Init (backend + providers)
+#         run: |
+#           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+#           terragrunt run-all init --reconfigure
+#           # terragrunt run -- run-all init --reconfigure
+#           # terragrunt run -- init --reconfigure
+
+#       - name: Validate
+#         run: |
+#           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment }}
+#           # terragrunt run-all validate
+#           terragrunt run -- validate
+
+#       - name: Lint (tflint)
+#         uses: terraform-linters/setup-tflint@v4
+#       - run: |
+#           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+#           tflint --recursive
+
+#       - name: Security Scan (tfsec)
+#         uses: aquasecurity/tfsec-action@v1.0.0
+
+#       - name: Plan
+#         run: |
+#           cd ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}
+#           # terragrunt run-all plan -out=tfplan
+#           terragrunt run -- plan -out=tfplan
+
+#       - name: Upload Plan
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: plan-${{ github.event.inputs.environment || 'dev' }}
+#           path: ${{ env.TERRAGRUNT_ROOT }}/${{ github.event.inputs.environment || 'dev' }}/**/tfplan
           
