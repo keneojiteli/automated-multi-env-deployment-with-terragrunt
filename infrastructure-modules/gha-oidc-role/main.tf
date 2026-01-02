@@ -1,7 +1,7 @@
 # tells terraform to expect remote state configuration
-terraform {
-  backend "s3" {}
-}
+# terraform {
+#   backend "s3" {}
+# }
 
 resource "aws_iam_role" "this" {
   name               = "gh-actions-${var.environment}-role"

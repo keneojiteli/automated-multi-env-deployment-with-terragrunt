@@ -1,7 +1,7 @@
 # tells terraform to expect remote state configuration
-terraform {
-  backend "s3" {}
-}
+# terraform {
+#   backend "s3" {}
+# }
 
 # provides an RDS DB subnet group resource (private subnet), a single resource that can take multiple subnets
 resource "aws_db_subnet_group" "db_subnet_group" {

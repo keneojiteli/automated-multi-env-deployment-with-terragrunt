@@ -28,8 +28,8 @@ remote_state {
     use_lockfile = true
   }
 
-  # generate = {
-  #   path      = "backend.tf"
-  #   if_exists = "overwrite_terragrunt"
-  # }
+  generate = {
+    path      = "backend.tf"
+    if_exists = "overwrite_terragrunt"
+  }
 }

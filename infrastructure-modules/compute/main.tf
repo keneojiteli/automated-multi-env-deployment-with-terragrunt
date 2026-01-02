@@ -1,8 +1,7 @@
 # tells terraform to expect remote state configuration
-terraform {
-  backend "s3" {}
-}
-
+# terraform {
+#   backend "s3" {}
+# }
 
 # get existing AMI from my AWS account
 # ensure the AMI's architecture is compatible with choosen instance type

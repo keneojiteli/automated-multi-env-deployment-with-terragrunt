@@ -1,7 +1,7 @@
 # tells terraform to expect remote state configuration
-terraform {
-  backend "s3" {}
-}
+# terraform {
+#   backend "s3" {}
+# }
 
 # OIDC PROVIDER (Created once per AWS account)
 # Terragrunt will try to apply this in each env, but AWS sees it's identical and reuses it
