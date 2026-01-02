@@ -50,46 +50,86 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Clean Terragrunt cache
+        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}
         run: |
           find . -type d -name ".terragrunt-cache" -prune -exec rm -rf {} +
+          find . -type d -name ".terraform" -prune -exec rm -rf {} +
 
-
-      # Init environment backend once
-      - name: Terragrunt init (env)
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}
-        run: terragrunt run -- init --reconfigure
-
-      # MODULE: VPC
-      - name: Plan VPC
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
-        run: |
-          terragrunt run -- init --reconfigure
-          terragrunt run -- plan -out=vpc.plan
-      - name: Apply VPC
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
-        run: terragrunt run -- apply vpc.plan
-
-      # MODULE: EC2
-      - name: Plan EC2
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
-        run: |
-          terragrunt run -- init --reconfigure
-          terragrunt run -- plan -out=ec2.plan
-      - name: Apply EC2
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
-        run: terragrunt run -- apply ec2.plan
-
-      # MODULE: RDS
-      - name: Plan RDS
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
-        run: |
-          terragrunt run -- init --reconfigure
-          terragrunt run -- plan -out=rds.plan
-      - name: Apply RDS
-        working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
+      - name: Terragrunt Plan (all modules)
+        working-directory: ${{ env.TG_ROOT }}/${{ github.event.inputs.target_env }}
         env:
-          TF_VAR_db_password: ${{ secrets.RDS_PASSWORD }}   # GitHub Env secret
-        run: terragrunt run -- apply rds.plan
+          TF_VAR_db_password: ${{ secrets.RDS_PASSWORD }}
+        run: |
+          terragrunt run --all init 
+          terragrunt run --all plan
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target_env }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Install Terragrunt
+        run: |
+          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terragrunt Apply (all modules)
+        working-directory: ${{ env.TG_ROOT }}/${{ github.event.inputs.target_env }}
+        env:
+          TF_VAR_db_password: ${{ secrets.RDS_PASSWORD }}
+        run: |
+          terragrunt run --all apply --terragrunt-non-interactive
+
+
+      # # Init environment backend once
+      # - name: Terragrunt init (env)
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}
+      #   run: terragrunt run all -- init 
+
+      # # MODULE: VPC
+      # - name: Plan VPC
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
+      #   run: |
+      #     terragrunt run -- init --reconfigure
+      #     terragrunt run -- plan -out=vpc.plan
+      # - name: Apply VPC
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/vpc
+      #   run: terragrunt run -- apply vpc.plan
+
+      # # MODULE: EC2
+      # - name: Plan EC2
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
+      #   run: |
+      #     terragrunt run -- init --reconfigure
+      #     terragrunt run -- plan -out=ec2.plan
+      # - name: Apply EC2
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/ec2
+      #   run: terragrunt run -- apply ec2.plan
+
+      # # MODULE: RDS
+      # - name: Plan RDS
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
+      #   run: |
+      #     terragrunt run -- init --reconfigure
+      #     terragrunt run -- plan -out=rds.plan
+      # - name: Apply RDS
+      #   working-directory: ${{ env.TG_ROOT }}/${{ env.TARGET_ENV }}/rds
+      #   env:
+      #     TF_VAR_db_password: ${{ secrets.RDS_PASSWORD }}   # GitHub Env secret
+      #   run: terragrunt run -- apply rds.plan
 
 
 
